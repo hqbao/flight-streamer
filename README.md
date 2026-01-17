@@ -1,22 +1,47 @@
-1. Setup env vars
-  get_idf
+# Flight Streamer
 
-2. Build the project
-  idf.py build
+A lightweight MJPEG video streaming server for ESP32-S3, designed for FPV (First Person View) and computer vision applications.
 
-3. Flash to device
-  idf.py -p <port> flash
+## Overview
 
-4. See console logs
-  idf.py -p <port> monitor
+Flight Streamer captures video frames from a camera module (e.g., OV2640, OV5640) and streams them over Wi-Fi using the HTTP Multipart protocol (MJPEG). This allows for low-latency video monitoring on web browsers or integration with CV pipelines (OpenCV, Python).
 
-Notes:
+## Features
 
-- To flash and see console logs
-  idf.py -p <port> flash monitor
+- **MJPEG Streaming:** Low-latency video via standard HTTP(S).
+- **Wi-Fi Connectivity:** SoftAP or Station mode support.
+- **Camera Support:** ESP32-Camera driver integration.
+- **Simple Client:** View stream directly in any web browser.
 
-- To get list of the ports (on macos)
-  ls /dev/cu.*
+## Getting Started
+
+### Prerequisites
+
+- ESP-IDF v5.x installed and sourced.
+
+### Build and Flash
+
+1. **Setup Environment**
+   ```bash
+   get_idf # or . $HOME/esp/esp-idf/export.sh
+   ```
+
+2. **Build the project**
+   ```bash
+   idf.py build
+   ```
+
+3. **Flash through USB/UART**
+   ```bash
+   idf.py -p <port> flash
+   ```
+   *Note: Replace `<port>` with your serial device (e.g., `/dev/ttyUSB0` or `/dev/cu.usbmodem...`)*
+
+4. **Monitor Output**
+   ```bash
+   idf.py -p <port> monitor
+   ```
+
 
 - To clean the build
   idf.py clean
