@@ -61,6 +61,7 @@ static void wifi_init_sta(void) {
                          pdFALSE, pdFALSE, portMAX_DELAY);
 
     ESP_LOGI(TAG, "Connected to: %s", WIFI_STA_SSID);
+    esp_wifi_set_ps(WIFI_PS_NONE);  // Disable power save for low latency
     publish(WIFI_CONNECTED, NULL, 0);
 }
 
@@ -111,7 +112,7 @@ static void wifi_init_ap(void) {
 
     ESP_LOGI(TAG, "AP mode: SSID=%s, Channel=%d, IP=192.168.4.1",
              WIFI_AP_SSID, WIFI_AP_CHANNEL);
-
+    esp_wifi_set_ps(WIFI_PS_NONE);  // Disable power save for low latency
     publish(WIFI_CONNECTED, NULL, 0);
 }
 

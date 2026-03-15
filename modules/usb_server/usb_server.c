@@ -17,14 +17,16 @@
 static TaskHandle_t g_rx_task_handle = NULL;
 
 // ---------------------------------------------------------------------------
-// UDP → USB: forward received UDP packets to USB host
+// UDP → USB: forward received packets to USB host
 // ---------------------------------------------------------------------------
-static void on_udp_received(uint8_t *data, size_t size) {
+static void on_packet_to_usb(uint8_t *data, size_t size) {
     if (size < sizeof(db_packet_t)) return;
     db_packet_t *pkt = (db_packet_t *)data;
     if (!pkt->data || pkt->len == 0) return;
 
-    usb_serial_jtag_write_bytes((const char *)pkt->data, pkt->len, portMAX_DELAY);
+    // Short timeout — if no USB host is connected, don't block the PubSub chain
+    usb_serial_jtag_write_bytes((const char *)pkt->data, pkt->len,
+                                20 / portTICK_PERIOD_MS);
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +96,7 @@ void usb_server_setup(void) {
     };
     ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb_cfg));
 
-    subscribe(UDP_RECEIVED, on_udp_received);
+    subscribe(UDP_RECEIVED, on_packet_to_usb);
 
     xTaskCreate(usb_rx_task, "usb_rx", 4096, NULL, 10, &g_rx_task_handle);
 

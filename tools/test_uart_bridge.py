@@ -32,20 +32,17 @@ from datetime import datetime
 # =============================================================================
 
 DB_HEADER = 6   # 'd' 'b' [id] [sub] [len_lo] [len_hi]
-DB_FOOTER = 2   # [ck_a] [ck_b]
+DB_FOOTER = 2   # [ck_lo] [ck_hi]  (16-bit sum, little-endian)
 DB_ID_TEST = 0x01
-BAUD = 38400
+BAUD = 9600
 
 
 def build_db_packet(msg_id, sub_id, payload):
-    """Build DB packet: ['d']['b'][ID][SubID][len_lo][len_hi][payload][ck_a][ck_b]"""
+    """Build DB packet: ['d']['b'][ID][SubID][len_lo][len_hi][payload][ck_lo][ck_hi]"""
     hdr = bytes([0x64, 0x62, msg_id, sub_id]) + struct.pack('<H', len(payload))
     body = hdr + payload
-    a = b = 0
-    for byte in body[2:]:
-        a = (a + byte) & 0xFF
-        b = (b + a) & 0xFF
-    return body + bytes([a, b])
+    cksum = sum(body[2:]) & 0xFFFF
+    return body + struct.pack('<H', cksum)
 
 
 def verify_db_packet(data):
@@ -58,11 +55,9 @@ def verify_db_packet(data):
     total = DB_HEADER + plen + DB_FOOTER
     if len(data) < total:
         return None
-    a = b = 0
-    for i in range(2, DB_HEADER + plen):
-        a = (a + data[i]) & 0xFF
-        b = (b + a) & 0xFF
-    if a != data[DB_HEADER + plen] or b != data[DB_HEADER + plen + 1]:
+    cksum = sum(data[2:DB_HEADER + plen]) & 0xFFFF
+    rx_ck = data[DB_HEADER + plen] | (data[DB_HEADER + plen + 1] << 8)
+    if cksum != rx_ck:
         return None
     return data[2], data[3], bytes(data[DB_HEADER:DB_HEADER + plen])
 

@@ -21,7 +21,7 @@ The project uses a strict **Event-Driven PubSub Architecture** — all inter-mod
 - **DB Protocol Parsing** — validates packet framing and checksums
 - **Dual Serial** — USB-CDC + UART1 always active simultaneously
 - **LED Activity Indicator** — built-in LED (GPIO 21) flashes on each received DB packet
-- **Low Latency** — non-blocking UDP sends with `MSG_DONTWAIT`
+- **Low Latency** — WiFi power save disabled, non-blocking UDP sends with `MSG_DONTWAIT`
 
 ## Project Structure
 
@@ -64,7 +64,7 @@ Python Tools ←── USB-CDC ──→ ESP32 ←── UART ──→ Flight C
 ```
 ┌────────┐  UART   ┌────────────┐  WiFi/UDP   ┌────────────┐  UART   ┌────────┐
 │ Device │◄──────►│  ESP32-A   │◄───────────►│  ESP32-B   │◄──────►│ Device │
-│  (FC)  │ 38400  │   (AP)     │  port 8554  │   (STA)    │ 38400  │  (FC)  │
+│  (FC)  │  9600  │   (AP)     │  port 8554  │   (STA)    │  9600  │  (FC)  │
 └────────┘        └────────────┘             └────────────┘        └────────┘
 ```
 
@@ -93,11 +93,11 @@ automatically — no external bridge needed.
 ### DB Protocol
 
 ```
-['d']['b'][ID][SubID][len_lo][len_hi][payload...][ck_a][ck_b]
+['d']['b'][ID][SubID][len_lo][len_hi][payload...][ck_lo][ck_hi]
 ```
 
 - **Header**: 6 bytes (`'d'` `'b'` + ID + SubID + 16-bit LE length)
-- **Checksum**: Fletcher-8 over bytes 2 through end of payload
+- **Checksum**: 16-bit sum (little-endian) over bytes 2 through end of payload
 - UART parser validates length bounds to prevent buffer overflow
 
 ## Configuration
@@ -120,6 +120,11 @@ Edit `base/boards/s3v1/board_config/platform.h`:
 #define UART_TX_PIN       43
 #define UART_RX_PIN       44
 ```
+
+**Notes:**
+- WiFi power saving is disabled (`WIFI_PS_NONE`) for low-latency communication
+- Console UART is disabled in `sdkconfig` (`CONFIG_ESP_CONSOLE_NONE=y`) to free GPIO 43/44 for UART1
+- All ESP log output is suppressed since USB-CDC shares the data stream
 
 ## Build & Flash
 

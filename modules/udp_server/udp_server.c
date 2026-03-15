@@ -95,8 +95,12 @@ static void start_udp(void) {
     g_peer_addr.sin_port   = htons(UDP_PORT);
     inet_aton("192.168.4.1", &g_peer_addr.sin_addr);
     g_peer_registered = true;
-    sendto(g_sock, "r", 1, 0,
-           (struct sockaddr *)&g_peer_addr, sizeof(g_peer_addr));
+    // Send registration repeatedly to ensure AP receives it
+    for (int i = 0; i < 5; i++) {
+        sendto(g_sock, "r", 1, 0,
+               (struct sockaddr *)&g_peer_addr, sizeof(g_peer_addr));
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
     ESP_LOGI(TAG, "Peer: 192.168.4.1:%d (AP)", UDP_PORT);
 #endif
 

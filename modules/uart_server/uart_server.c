@@ -12,7 +12,7 @@
 #define TAG "uart_server"
 
 #define FC_UART_PORT  UART_NUM_1
-#define FC_BAUD_RATE  38400
+#define FC_BAUD_RATE  9600
 
 #define DB_HEADER_SIZE 6
 #define DB_FOOTER_SIZE 2
@@ -20,9 +20,9 @@
 static TaskHandle_t g_rx_task_handle = NULL;
 
 // ---------------------------------------------------------------------------
-// UDP → UART: forward received UDP packets to flight controller
+// UDP/USB → UART: forward received packets to flight controller
 // ---------------------------------------------------------------------------
-static void on_udp_received(uint8_t *data, size_t size) {
+static void on_packet_to_uart(uint8_t *data, size_t size) {
     if (size < sizeof(db_packet_t)) return;
     db_packet_t *pkt = (db_packet_t *)data;
     if (!pkt->data || pkt->len == 0) return;
@@ -111,7 +111,7 @@ void uart_server_setup(void) {
     ESP_ERROR_CHECK(uart_set_pin(FC_UART_PORT, UART_TX_PIN, UART_RX_PIN,
                                  UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
-    subscribe(UDP_RECEIVED, on_udp_received);
+    subscribe(UDP_RECEIVED, on_packet_to_uart);
 
     xTaskCreate(uart_rx_task, "uart_rx", 4096, NULL, 10, &g_rx_task_handle);
 
