@@ -16,8 +16,8 @@ The project uses a strict **Event-Driven PubSub Architecture** — all inter-mod
 
 - **Bidirectional UART↔UDP Bridge** — DB protocol packets forwarded transparently
 - **WiFi AP Mode** — ESP32 creates its own hotspot (no router needed)
-- **WiFi STA Mode** — ESP32 joins an existing network
-- **Zero Configuration** — any UDP client auto-registers on first packet
+- **WiFi STA Mode** — ESP32 joins an existing network, retries indefinitely
+- **Auto-Peer** — STA registers with AP on connect, AP registers STA on first packet
 - **DB Protocol Parsing** — validates packet framing and checksums on UART RX
 - **Low Latency** — non-blocking UDP sends with `MSG_DONTWAIT`
 
