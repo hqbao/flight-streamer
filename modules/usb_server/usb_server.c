@@ -1,6 +1,6 @@
-#include "uart_server.h"
+#include "usb_server.h"
 #include <string.h>
-#include <driver/uart.h>
+#include <driver/usb_serial_jtag.h>
 #include <driver/gpio.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
@@ -9,10 +9,7 @@
 #include "messages.h"
 #include "platform.h"
 
-#define TAG "uart_server"
-
-#define FC_UART_PORT  UART_NUM_1
-#define FC_BAUD_RATE  38400
+#define TAG "usb_server"
 
 #define DB_HEADER_SIZE 6
 #define DB_FOOTER_SIZE 2
@@ -20,22 +17,20 @@
 static TaskHandle_t g_rx_task_handle = NULL;
 
 // ---------------------------------------------------------------------------
-// UDP → UART: forward received UDP packets to flight controller
+// UDP → USB: forward received UDP packets to USB host
 // ---------------------------------------------------------------------------
 static void on_udp_received(uint8_t *data, size_t size) {
     if (size < sizeof(db_packet_t)) return;
     db_packet_t *pkt = (db_packet_t *)data;
     if (!pkt->data || pkt->len == 0) return;
 
-    gpio_set_level(LED_PIN, 0);
-    uart_write_bytes(FC_UART_PORT, (const char *)pkt->data, pkt->len);
-    gpio_set_level(LED_PIN, 1);
+    usb_serial_jtag_write_bytes((const char *)pkt->data, pkt->len, portMAX_DELAY);
 }
 
 // ---------------------------------------------------------------------------
-// UART RX: parse complete DB packets, publish UART_RECEIVED
+// USB RX: parse complete DB packets, publish USB_RECEIVED
 // ---------------------------------------------------------------------------
-static void uart_rx_task(void *arg) {
+static void usb_rx_task(void *arg) {
     uint8_t rx_buf[128];
     uint8_t pkt_buf[256];
     int pkt_idx = 0;
@@ -43,8 +38,8 @@ static void uart_rx_task(void *arg) {
     int stage = 0;
 
     while (1) {
-        int len = uart_read_bytes(FC_UART_PORT, rx_buf, sizeof(rx_buf),
-                                  20 / portTICK_PERIOD_MS);
+        int len = usb_serial_jtag_read_bytes(rx_buf, sizeof(rx_buf),
+                                             20 / portTICK_PERIOD_MS);
         if (len <= 0) continue;
 
         for (int i = 0; i < len; i++) {
@@ -76,7 +71,7 @@ static void uart_rx_task(void *arg) {
                     if (pkt_idx >= DB_HEADER_SIZE + payload_size + DB_FOOTER_SIZE) {
                         gpio_set_level(LED_PIN, 0);
                         db_packet_t pkt = { .data = pkt_buf, .len = (size_t)pkt_idx };
-                        publish(UART_RECEIVED, (uint8_t *)&pkt, sizeof(db_packet_t));
+                        publish(USB_RECEIVED, (uint8_t *)&pkt, sizeof(db_packet_t));
                         gpio_set_level(LED_PIN, 1);
                         stage = 0;
                     }
@@ -92,28 +87,16 @@ static void uart_rx_task(void *arg) {
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
-void uart_server_setup(void) {
-    // LED for packet activity (active-low: 0=on, 1=off)
-    gpio_reset_pin(LED_PIN);
-    gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_level(LED_PIN, 1);
-
-    const uart_config_t cfg = {
-        .baud_rate  = FC_BAUD_RATE,
-        .data_bits  = UART_DATA_8_BITS,
-        .parity     = UART_PARITY_DISABLE,
-        .stop_bits  = UART_STOP_BITS_1,
-        .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
+void usb_server_setup(void) {
+    usb_serial_jtag_driver_config_t usb_cfg = {
+        .rx_buffer_size = 1024,
+        .tx_buffer_size = 1024,
     };
-    ESP_ERROR_CHECK(uart_param_config(FC_UART_PORT, &cfg));
-    ESP_ERROR_CHECK(uart_driver_install(FC_UART_PORT, 1024, 0, 0, NULL, 0));
-    ESP_ERROR_CHECK(uart_set_pin(FC_UART_PORT, UART_TX_PIN, UART_RX_PIN,
-                                 UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb_cfg));
 
     subscribe(UDP_RECEIVED, on_udp_received);
 
-    xTaskCreate(uart_rx_task, "uart_rx", 4096, NULL, 10, &g_rx_task_handle);
+    xTaskCreate(usb_rx_task, "usb_rx", 4096, NULL, 10, &g_rx_task_handle);
 
-    ESP_LOGI(TAG, "UART%d @ %d baud", FC_UART_PORT, FC_BAUD_RATE);
+    ESP_LOGI(TAG, "USB-CDC serial");
 }

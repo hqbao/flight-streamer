@@ -21,10 +21,6 @@
 #define platform_console(fmt, ...) printf(fmt, ##__VA_ARGS__)
 
 // === Serial Interface ===
-// 0 = UART1 on GPIO 43/44 (connect to flight controller)
-// 1 = USB-CDC (test via USB cable with test_uart_bridge.py)
-#define UART_USE_USB      1
-
 #define UART_TX_PIN       43
 #define UART_RX_PIN       44
 

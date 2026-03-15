@@ -9,6 +9,7 @@ set(EXTRA_COMPONENT_DIRS
     "${PROJECT_PATH}/modules/wifi"
     "${PROJECT_PATH}/modules/udp_server"
     "${PROJECT_PATH}/modules/uart_server"
+    "${PROJECT_PATH}/modules/usb_server"
     "main"
 )
 

@@ -1,12 +1,10 @@
 #!/bin/bash
 # Flash two ESP32 devices: one as AP, one as STA
-# Usage: ./flash_pair.sh [--usb] [port1 port2]
+# Usage: ./flash_pair.sh [port1 port2]
 #
 # Automatically detects two USB ports, flashes the first as AP and second as STA.
-#   --usb   Enable USB-CDC serial (for testing via USB cable instead of UART1 pins)
 # To swap which device is AP/STA, pass ports explicitly:
 #   ./flash_pair.sh /dev/cu.usbmodem31101 /dev/cu.usbmodem1101
-#   ./flash_pair.sh --usb /dev/cu.usbmodem31101 /dev/cu.usbmodem1101
 
 set -e
 
@@ -19,17 +17,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
-
-# --- Parse options ---
-USE_USB=0
-POSITIONAL=()
-for arg in "$@"; do
-    case $arg in
-        --usb)  USE_USB=1 ;;
-        *)      POSITIONAL+=("$arg") ;;
-    esac
-done
-set -- "${POSITIONAL[@]}"
 
 # --- Find ports ---
 if [ $# -ge 2 ]; then
@@ -57,7 +44,6 @@ fi
 echo -e "${GREEN}=== Flash Pair ===${NC}"
 echo -e "  AP  (Device A): ${YELLOW}$PORT_AP${NC}"
 echo -e "  STA (Device B): ${YELLOW}$PORT_STA${NC}"
-echo -e "  Serial I/O:     ${YELLOW}$([ $USE_USB -eq 1 ] && echo 'USB-CDC' || echo 'UART1 (GPIO 43/44)')${NC}"
 echo ""
 
 # --- Source ESP-IDF ---
@@ -68,14 +54,6 @@ set_wifi_mode() {
     local mode=$1  # 0 or 1
     sed -i '' "s/#define ENABLE_WIFI_AP.*/#define ENABLE_WIFI_AP    $mode/" "$PLATFORM_H"
 }
-
-set_uart_usb() {
-    local mode=$1  # 0 or 1
-    sed -i '' "s/#define UART_USE_USB.*/#define UART_USE_USB      $mode/" "$PLATFORM_H"
-}
-
-# --- Set serial mode ---
-set_uart_usb $USE_USB
 
 # --- Flash AP ---
 echo -e "${GREEN}[1/2] Building & flashing AP (ENABLE_WIFI_AP=1) → $PORT_AP${NC}"

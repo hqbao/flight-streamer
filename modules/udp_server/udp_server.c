@@ -110,4 +110,5 @@ static void on_wifi_connected(uint8_t *data, size_t size) {
 void udp_server_setup(void) {
     subscribe(WIFI_CONNECTED, on_wifi_connected);
     subscribe(UART_RECEIVED, on_uart_received);
+    subscribe(USB_RECEIVED, on_uart_received);
 }

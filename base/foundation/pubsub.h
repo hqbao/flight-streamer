@@ -9,6 +9,7 @@ typedef enum {
 	WIFI_CONNECTED,
 	UDP_RECEIVED,
 	UART_RECEIVED,
+	USB_RECEIVED,
 
 	TOPIC_NULL
 } topic_t;

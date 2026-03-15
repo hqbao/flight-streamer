@@ -41,7 +41,8 @@ flight-streamer/
 ├── modules/
 │   ├── wifi/                   # WiFi AP or STA mode
 │   ├── udp_server/             # UDP socket — sends/receives via PubSub
-│   └── uart_server/            # UART — DB packet parser, sends/receives via PubSub
+│   ├── uart_server/            # UART1 — DB packet parser for flight controller
+│   └── usb_server/             # USB-CDC — DB packet parser for USB host
 │
 └── tools/
     └── test_uart_bridge.py     # GUI tool to test two-device wireless data link
@@ -54,7 +55,8 @@ flight-streamer/
 #### Single Device (wireless telemetry)
 
 ```
-Python Tools ←── UDP/WiFi ──→ ESP32 ←── UART ──→ Flight Controller
+Python Tools ←── USB-CDC ──→ ESP32 ←── UART ──→ Flight Controller
+                             └──── UDP/WiFi ────→ Peer ESP32
 ```
 
 #### Two Devices (peer-to-peer relay)
@@ -75,15 +77,17 @@ automatically — no external bridge needed.
 | Topic | Publisher | Subscriber | Purpose |
 |-------|-----------|------------|---------|
 | `WIFI_CONNECTED` | wifi | udp_server | Start UDP socket after WiFi is ready |
-| `UDP_RECEIVED` | udp_server | uart_server | Forward UDP packets → UART (to FC) |
-| `UART_RECEIVED` | uart_server | udp_server | Forward UART packets → UDP (to client) |
+| `UDP_RECEIVED` | udp_server | uart_server, usb_server | Forward UDP packets → UART + USB |
+| `UART_RECEIVED` | uart_server | udp_server | Forward UART packets → UDP (to peer) |
+| `USB_RECEIVED` | usb_server | udp_server | Forward USB packets → UDP (to peer) |
 
 ### Module Details
 
 | Module | Task | Priority | Purpose |
 |--------|------|----------|---------|
 | `udp_server` | `udp_rx` | 5 | Receive UDP, publish `UDP_RECEIVED` |
-| `uart_server` | `uart_rx` | 10 | Parse DB packets from UART, publish `UART_RECEIVED` |
+| `uart_server` | `uart_rx` | 10 | Parse DB packets from UART1, publish `UART_RECEIVED` |
+| `usb_server` | `usb_rx` | 10 | Parse DB packets from USB-CDC, publish `USB_RECEIVED` |
 | `wifi` | — | — | WiFi init (AP or STA), publish `WIFI_CONNECTED` |
 
 ### DB Protocol
@@ -103,9 +107,6 @@ Edit `base/boards/s3v1/board_config/platform.h`:
 ```c
 // WiFi mode: 0 = STA (join router), 1 = AP (create hotspot)
 #define ENABLE_WIFI_AP    0
-
-// Serial I/O: 0 = UART1 on GPIO 43/44, 1 = USB-CDC (test via USB cable)
-#define UART_USE_USB      0
 
 // STA mode credentials
 #define WIFI_STA_SSID     "YourSSID"
@@ -157,13 +158,13 @@ ls /dev/cu.usbmodem*
 ### Two-Device Bridge Test
 
 Tests end-to-end data transmission between two ESP32 modules over WiFi.
-The laptop communicates with each device via USB only — the ESP32s
+The laptop communicates with each device via USB-CDC — the ESP32s
 handle the WiFi link between themselves automatically.
 
-1. Flash both devices with USB-CDC enabled for testing:
+1. Flash both devices:
    ```bash
    cd flight-streamer/base/boards/s3v1
-   ./flash_pair.sh --usb
+   ./flash_pair.sh
    ```
 2. Connect both devices to laptop via USB
 3. Run the test tool:
@@ -174,9 +175,8 @@ python3 flight-streamer/tools/test_uart_bridge.py
 
 Data flow: `Tool → USB-A → ESP32-A → WiFi → ESP32-B → USB-B → Tool`
 
-> **Note:** `--usb` sets `UART_USE_USB=1` so data goes through the USB cable.
-> For production (connecting to flight controller), re-flash without `--usb`
-> to use UART1 on GPIO 43/44.
+Both USB-CDC and UART1 are always active — USB for host tools,
+UART1 for flight controller connection. No mode switching needed.
 
 The tool provides:
 - Two UART port selectors (one per device)

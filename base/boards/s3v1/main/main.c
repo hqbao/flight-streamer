@@ -9,16 +9,13 @@
 #include "wifi.h"
 #include "udp_server.h"
 #include "uart_server.h"
+#include "usb_server.h"
 
 #define TAG "main"
 
 void app_main(void) {
-#if UART_USE_USB
-    // Suppress all log output — USB-CDC shares the same port as our data stream
+    // Suppress log output — USB-CDC shares the same port as our data stream
     esp_log_level_set("*", ESP_LOG_NONE);
-#endif
-
-    ESP_LOGI(TAG, "Starting Flight Streamer...");
 
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -29,14 +26,8 @@ void app_main(void) {
     ESP_ERROR_CHECK(ret);
 
     // Initialize modules
-    ESP_LOGI(TAG, "Initializing UDP Server...");
     udp_server_setup();
-
-    ESP_LOGI(TAG, "Initializing UART Server...");
     uart_server_setup();
-
-    ESP_LOGI(TAG, "Initializing WiFi...");
+    usb_server_setup();
     wifi_setup();
-
-    ESP_LOGI(TAG, "System Started");
 }
