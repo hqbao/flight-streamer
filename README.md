@@ -198,3 +198,7 @@ The tool provides:
 |---------|-------------|
 | [flight-controller](../flight-controller/) | STM32H7 autopilot (consumer of this bridge) |
 | [flight-optflow](../flight-optflow/) | ESP32-S3 optical flow sensor module |
+
+## License
+
+Proprietary. See LICENSE file for details.
