@@ -9,10 +9,18 @@ void led_init(void) {
     gpio_set_level(LED_PIN, 1);  // off (active-low)
 }
 
-void led_on(void) {
-    gpio_set_level(LED_PIN, 0);
+void led_connecting(void) {
+    gpio_set_level(LED_PIN, 0);  // on
+}
+
+void led_connected(void) {
+    gpio_set_level(LED_PIN, 1);  // off
+}
+
+void led_data(void) {
+    gpio_set_level(LED_PIN, 0);  // on
 }
 
 void led_off(void) {
-    gpio_set_level(LED_PIN, 1);
+    gpio_set_level(LED_PIN, 1);  // off
 }

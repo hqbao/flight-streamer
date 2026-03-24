@@ -26,6 +26,7 @@ static void sta_event_handler(void *arg, esp_event_base_t event_base,
         esp_wifi_connect();
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        led_connecting();
         ESP_LOGI(TAG, "Disconnected, retrying in 1s...");
         vTaskDelay(pdMS_TO_TICKS(1000));
         esp_wifi_connect();
@@ -33,7 +34,10 @@ static void sta_event_handler(void *arg, esp_event_base_t event_base,
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        led_connected();
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        // Publish on every IP acquisition (initial + reconnect)
+        publish(WIFI_CONNECTED, NULL, 0);
     }
 }
 
@@ -62,7 +66,6 @@ static void wifi_init_sta(void) {
 
     ESP_LOGI(TAG, "Connected to: %s", WIFI_STA_SSID);
     esp_wifi_set_ps(WIFI_PS_NONE);  // Disable power save for low latency
-    publish(WIFI_CONNECTED, NULL, 0);
 }
 
 #endif
@@ -113,6 +116,7 @@ static void wifi_init_ap(void) {
     ESP_LOGI(TAG, "AP mode: SSID=%s, Channel=%d, IP=192.168.4.1",
              WIFI_AP_SSID, WIFI_AP_CHANNEL);
     esp_wifi_set_ps(WIFI_PS_NONE);  // Disable power save for low latency
+    led_connected();
     publish(WIFI_CONNECTED, NULL, 0);
 }
 

@@ -29,7 +29,9 @@
 #define LED_PIN           48
 
 void led_init(void);
-void led_on(void);
+void led_connecting(void);  // blue — WiFi searching
+void led_connected(void);   // dim green — WiFi connected, idle
+void led_data(void);        // bright green — packet activity
 void led_off(void);
 
 #endif

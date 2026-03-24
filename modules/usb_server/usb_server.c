@@ -70,10 +70,10 @@ static void usb_rx_task(void *arg) {
                 case 6:
                     pkt_buf[pkt_idx++] = b;
                     if (pkt_idx >= DB_HEADER_SIZE + payload_size + DB_FOOTER_SIZE) {
-                        led_on();
+                        led_data();
                         db_packet_t pkt = { .data = pkt_buf, .len = (size_t)pkt_idx };
                         publish(USB_RECEIVED, (uint8_t *)&pkt, sizeof(db_packet_t));
-                        led_off();
+                        led_connected();
                         stage = 0;
                     }
                     break;

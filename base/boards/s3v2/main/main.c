@@ -25,6 +25,10 @@ void app_main(void) {
     }
     ESP_ERROR_CHECK(ret);
 
+    // LED — show connecting status from boot
+    led_init();
+    led_connecting();
+
     // Initialize modules
     udp_server_setup();
     uart_server_setup();

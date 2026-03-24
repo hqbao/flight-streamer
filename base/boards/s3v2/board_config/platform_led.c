@@ -1,7 +1,7 @@
 #include "platform.h"
 #include <led_strip.h>
 
-// SuperMini ESP32-S3: WS2812 addressable RGB LED
+// SuperMini ESP32-S3: WS2812 addressable RGB LED on GPIO 48
 
 static led_strip_handle_t g_led_strip;
 
@@ -17,8 +17,18 @@ void led_init(void) {
     led_strip_clear(g_led_strip);
 }
 
-void led_on(void) {
-    led_strip_set_pixel(g_led_strip, 0, 0, 8, 0);  // dim green
+void led_connecting(void) {
+    led_strip_set_pixel(g_led_strip, 0, 0, 0, 12);  // blue
+    led_strip_refresh(g_led_strip);
+}
+
+void led_connected(void) {
+    led_strip_set_pixel(g_led_strip, 0, 0, 8, 0);   // dim green
+    led_strip_refresh(g_led_strip);
+}
+
+void led_data(void) {
+    led_strip_set_pixel(g_led_strip, 0, 0, 40, 0);  // bright green
     led_strip_refresh(g_led_strip);
 }
 

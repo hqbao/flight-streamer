@@ -20,7 +20,7 @@ The project uses a strict **Event-Driven PubSub Architecture** — all inter-mod
 - **Auto-Peer** — STA registers with AP on connect, AP registers STA on first packet
 - **DB Protocol Parsing** — validates packet framing and checksums
 - **Dual Serial** — USB-CDC + UART1 always active simultaneously
-- **LED Activity Indicator** — board LED flashes on each received DB packet
+- **LED Status Indicator** — shows connection state and data activity (RGB colors on s3v2, on/off on s3v1)
 - **Low Latency** — WiFi power save disabled, non-blocking UDP sends with `MSG_DONTWAIT`
 
 ## Project Structure
@@ -33,17 +33,17 @@ flight-streamer/
 │   │   └── messages.h          #   Shared message structs (db_packet_t)
 │   └── boards/
 │       ├── s3v1/               # XIAO ESP32-S3 Sense (8MB flash, PSRAM)
-│       │   ├── board_config/   #   Hardware config + LED driver (GPIO)
+│       │   ├── board_config/   #   Hardware config + LED status driver (GPIO)
 │       │   │   ├── platform.h  #   WiFi credentials, UART pins, LED pin
-│       │   │   └── platform_led.c  # Simple active-low GPIO LED
+│       │   │   └── platform_led.c  # Active-low GPIO status LED
 │       │   └── main/
-│       │       └── main.c      #   Module initialization
+│       │       └── main.c      #   LED init + module initialization
 │       └── s3v2/               # SuperMini ESP32-S3 (4MB flash, no PSRAM)
-│           ├── board_config/   #   Hardware config + LED driver (WS2812)
+│           ├── board_config/   #   Hardware config + LED status driver (WS2812)
 │           │   ├── platform.h  #   WiFi credentials, UART pins, LED pin
-│           │   └── platform_led.c  # WS2812 RGB LED via RMT
+│           │   └── platform_led.c  # WS2812 RGB status LED via RMT
 │           └── main/
-│               └── main.c      #   Module initialization
+│               └── main.c      #   LED init + module initialization
 │
 ├── modules/
 │   ├── wifi/                   # WiFi AP or STA mode
@@ -116,6 +116,19 @@ automatically — no external bridge needed.
 
 Both boards share UART pins (GPIO 43 TX, GPIO 44 RX) and USB-Serial/JTAG.
 
+### LED Status Indicator
+
+The LED provides visual feedback for connection state and data activity:
+
+| State | s3v2 (WS2812 RGB) | s3v1 (GPIO) |
+|-------|-------------------|-------------|
+| Connecting (WiFi searching) | Blue | On |
+| Connected (idle) | Dim green | Off |
+| Data activity (packet TX/RX) | Bright green | On |
+| Off | Off | Off |
+
+The LED API (`led_connecting`, `led_connected`, `led_data`, `led_off`) is board-specific — each board's `platform_led.c` maps these states to its hardware.
+
 ## Configuration
 
 Edit `base/boards/<target>/board_config/platform.h`:
@@ -140,7 +153,7 @@ Edit `base/boards/<target>/board_config/platform.h`:
 **Notes:**
 - WiFi power saving is disabled (`WIFI_PS_NONE`) for low-latency communication
 - All ESP log output is suppressed since USB-CDC shares the data stream
-- LED driver is board-specific: `platform_led.c` in each board's `board_config/`
+- LED status driver is board-specific: `platform_led.c` in each board's `board_config/`
 
 ## Build & Flash
 

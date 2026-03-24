@@ -50,7 +50,6 @@ static void udp_rx_task(void *arg) {
             ESP_LOGI(TAG, "Peer: %s:%d",
                      inet_ntoa(g_peer_addr.sin_addr),
                      ntohs(g_peer_addr.sin_port));
-            // Reply so peer registers us too
             sendto(g_sock, "r", 1, 0,
                    (struct sockaddr *)&g_peer_addr, sizeof(g_peer_addr));
         }
@@ -67,7 +66,30 @@ static void udp_rx_task(void *arg) {
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
+#if !ENABLE_WIFI_AP
+static void send_registration(void) {
+    g_peer_addr.sin_family = AF_INET;
+    g_peer_addr.sin_port   = htons(UDP_PORT);
+    inet_aton("192.168.4.1", &g_peer_addr.sin_addr);
+    g_peer_registered = true;
+    for (int i = 0; i < 5; i++) {
+        sendto(g_sock, "r", 1, 0,
+               (struct sockaddr *)&g_peer_addr, sizeof(g_peer_addr));
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    ESP_LOGI(TAG, "Registered with AP 192.168.4.1:%d", UDP_PORT);
+}
+#endif
+
 static void start_udp(void) {
+    // Socket already created — just re-register with AP
+    if (g_sock >= 0) {
+#if !ENABLE_WIFI_AP
+        send_registration();
+#endif
+        return;
+    }
+
     struct sockaddr_in addr = {
         .sin_family      = AF_INET,
         .sin_port        = htons(UDP_PORT),
@@ -89,19 +111,8 @@ static void start_udp(void) {
 
     ESP_LOGI(TAG, "UDP on port %d", UDP_PORT);
 
-    // STA mode: AP is always at 192.168.4.1 — register immediately
 #if !ENABLE_WIFI_AP
-    g_peer_addr.sin_family = AF_INET;
-    g_peer_addr.sin_port   = htons(UDP_PORT);
-    inet_aton("192.168.4.1", &g_peer_addr.sin_addr);
-    g_peer_registered = true;
-    // Send registration repeatedly to ensure AP receives it
-    for (int i = 0; i < 5; i++) {
-        sendto(g_sock, "r", 1, 0,
-               (struct sockaddr *)&g_peer_addr, sizeof(g_peer_addr));
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    ESP_LOGI(TAG, "Peer: 192.168.4.1:%d (AP)", UDP_PORT);
+    send_registration();
 #endif
 
     xTaskCreate(udp_rx_task, "udp_rx", 4096, NULL, 5, &g_rx_task_handle);
