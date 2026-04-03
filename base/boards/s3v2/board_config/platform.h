@@ -29,9 +29,11 @@
 #define LED_PIN           48
 
 void led_init(void);
-void led_connecting(void);  // blue — WiFi searching
-void led_connected(void);   // dim green — WiFi connected, idle
-void led_data(void);        // bright green — packet activity
+void led_not_connected(void);  // solid RED — no WiFi
+void led_connecting(void);     // white (R+G+B) — STA connecting
+void led_connected(void);      // OFF — WiFi ready
+void led_send(void);           // GREEN flash — sending data
+void led_recv(void);           // BLUE flash — receiving data
 void led_off(void);
 
 #endif

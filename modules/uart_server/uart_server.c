@@ -11,7 +11,7 @@
 #define TAG "uart_server"
 
 #define FC_UART_PORT  UART_NUM_1
-#define FC_BAUD_RATE  9600
+#define FC_BAUD_RATE  19200
 
 #define DB_HEADER_SIZE 6
 #define DB_FOOTER_SIZE 2
@@ -26,9 +26,8 @@ static void on_packet_to_uart(uint8_t *data, size_t size) {
     db_packet_t *pkt = (db_packet_t *)data;
     if (!pkt->data || pkt->len == 0) return;
 
-    led_data();
+    led_send();
     uart_write_bytes(FC_UART_PORT, (const char *)pkt->data, pkt->len);
-    led_connected();
 }
 
 // ---------------------------------------------------------------------------
@@ -73,10 +72,9 @@ static void uart_rx_task(void *arg) {
                 case 6:
                     pkt_buf[pkt_idx++] = b;
                     if (pkt_idx >= DB_HEADER_SIZE + payload_size + DB_FOOTER_SIZE) {
-                        led_data();
+                        led_recv();
                         db_packet_t pkt = { .data = pkt_buf, .len = (size_t)pkt_idx };
                         publish(UART_RECEIVED, (uint8_t *)&pkt, sizeof(db_packet_t));
-                        led_connected();
                         stage = 0;
                     }
                     break;

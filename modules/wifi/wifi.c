@@ -26,9 +26,10 @@ static void sta_event_handler(void *arg, esp_event_base_t event_base,
         esp_wifi_connect();
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        led_connecting();
+        led_not_connected();
         ESP_LOGI(TAG, "Disconnected, retrying in 1s...");
         vTaskDelay(pdMS_TO_TICKS(1000));
+        led_connecting();
         esp_wifi_connect();
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -75,15 +76,23 @@ static void wifi_init_sta(void) {
 // ---------------------------------------------------------------------------
 #if ENABLE_WIFI_AP
 
+static int s_ap_sta_count = 0;
+
 static void ap_event_handler(void *arg, esp_event_base_t event_base,
                              int32_t event_id, void *event_data) {
     if (event_id == WIFI_EVENT_AP_STACONNECTED) {
         wifi_event_ap_staconnected_t *event = (wifi_event_ap_staconnected_t *)event_data;
         ESP_LOGI(TAG, "Station joined, AID=%d", event->aid);
+        s_ap_sta_count++;
+        led_connected();
     }
     else if (event_id == WIFI_EVENT_AP_STADISCONNECTED) {
         wifi_event_ap_stadisconnected_t *event = (wifi_event_ap_stadisconnected_t *)event_data;
         ESP_LOGI(TAG, "Station left, AID=%d", event->aid);
+        if (--s_ap_sta_count <= 0) {
+            s_ap_sta_count = 0;
+            led_not_connected();
+        }
     }
 }
 
@@ -116,7 +125,7 @@ static void wifi_init_ap(void) {
     ESP_LOGI(TAG, "AP mode: SSID=%s, Channel=%d, IP=192.168.4.1",
              WIFI_AP_SSID, WIFI_AP_CHANNEL);
     esp_wifi_set_ps(WIFI_PS_NONE);  // Disable power save for low latency
-    led_connected();
+    led_not_connected();  // RED — waiting for station to connect
     publish(WIFI_CONNECTED, NULL, 0);
 }
 

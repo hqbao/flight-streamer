@@ -28,9 +28,11 @@
 #define LED_PIN           21   // Xiao ESP32-S3 built-in LED (active-low GPIO)
 
 void led_init(void);
-void led_connecting(void);  // LED on — WiFi searching
-void led_connected(void);   // LED off — WiFi connected, idle
-void led_data(void);        // LED on — packet activity
+void led_not_connected(void);  // LED on — no WiFi
+void led_connecting(void);     // LED on — STA connecting
+void led_connected(void);      // LED off — WiFi ready
+void led_send(void);           // LED flash — sending data
+void led_recv(void);           // LED flash — receiving data
 void led_off(void);
 
 #endif

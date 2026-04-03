@@ -120,14 +120,26 @@ Both boards share UART pins (GPIO 43 TX, GPIO 44 RX) and USB-Serial/JTAG.
 
 The LED provides visual feedback for connection state and data activity:
 
+**STA mode (connecting to AP):**
+
 | State | s3v2 (WS2812 RGB) | s3v1 (GPIO) |
 |-------|-------------------|-------------|
-| Connecting (WiFi searching) | Blue | On |
-| Connected (idle) | Dim green | Off |
-| Data activity (packet TX/RX) | Bright green | On |
-| Off | Off | Off |
+| Not connected | Solid RED | On |
+| Connecting (retrying) | White (R+G+B) | On |
+| Connected (idle) | OFF | Off |
+| Sending data (UART TX) | GREEN flash | Flash |
+| Receiving data (UART/USB RX) | BLUE flash | Flash |
 
-The LED API (`led_connecting`, `led_connected`, `led_data`, `led_off`) is board-specific — each board's `platform_led.c` maps these states to its hardware.
+**AP mode (hosting network):**
+
+| State | s3v2 (WS2812 RGB) | s3v1 (GPIO) |
+|-------|-------------------|-------------|
+| No stations connected | Solid RED | On |
+| Station connected (idle) | OFF | Off |
+| Sending data (UART TX) | GREEN flash | Flash |
+| Receiving data (UART/USB RX) | BLUE flash | Flash |
+
+Data flashes are 50ms pulses using `esp_timer`. The LED API (`led_not_connected`, `led_connecting`, `led_connected`, `led_send`, `led_recv`, `led_off`) is board-specific — each board's `platform_led.c` maps these states to its hardware.
 
 ## Configuration
 

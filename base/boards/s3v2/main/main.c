@@ -25,9 +25,9 @@ void app_main(void) {
     }
     ESP_ERROR_CHECK(ret);
 
-    // LED — show connecting status from boot
+    // LED — show not-connected (RED) from boot
     led_init();
-    led_connecting();
+    led_not_connected();
 
     // Initialize modules
     udp_server_setup();
