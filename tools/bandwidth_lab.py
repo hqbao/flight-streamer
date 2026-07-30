@@ -43,8 +43,9 @@ from _fc_pytools import add_flight_controller_pytools  # noqa: E402
 add_flight_controller_pytools()
 from _ui import (                         # noqa: E402
     apply_theme, make_figure, add_panel, style_axes, make_button,
-    restyle_button, make_footer, screen_fit_figsize, _inset,
+    restyle_button, make_footer, screen_fit_figsize, _inset, _fig_y0,
     enable_scroll_zoom, add_scroll_hint,
+    TITLE_GAP, ROW_GAP,
     PANEL, PANEL_EDGE, TEXT, TEXT_DIM, TEXT_FAINT,
     ACCENT, GOOD, WARN, BAD,
     TRACE_1, TRACE_2,
@@ -390,6 +391,37 @@ def _style_textbox(tb):
         pass
 
 
+# ---------------------------------------------------------------------------
+# Field-label layout
+#
+# The card-title collision is now fixed UPSTREAM: add_panel returns content_top
+# (the title's measured bottom edge) and callers inset by it directly, so the
+# local _titled_panel that used to re-measure the title add_panel drew is gone.
+#
+# What stays a caller-side job is the FIELD labels (DIRECTION, CHUNK B, ...) that
+# this dashboard draws itself — add_panel never sees them. A field label is
+# 8.5 pt like a card title, so its height as a FRACTION of the figure grows as
+# the figure shrinks (and screen_fit_figsize picks the figure size from the
+# operator's display), which makes a constant "label height" offset wrong on a
+# different screen for the very reason a constant title reserve was. So a
+# label's control is placed at the label's MEASURED bottom, via _ui._fig_y0 --
+# the same primitive add_panel's content_top is built on, not a second copy of
+# it. TITLE_GAP is _ui's one "clear space under a label" token, reused here.
+# ---------------------------------------------------------------------------
+
+
+def _field_label(fig, x, top, text):
+    """Draw a field label with its TOP at `top`; return its control's top y.
+
+    Returning the measured bottom keeps a control from being drawn over its own
+    label — the MESSAGE box in test_uart_bridge.py did exactly that when the
+    label was offset by a hand-guessed constant instead.
+    """
+    label = fig.text(x, top, text, fontsize=8.5, color=TEXT_DIM,
+                     family='monospace', va='top')
+    return _fig_y0(fig, label) - TITLE_GAP
+
+
 # Substring filters: ports whose device path matches any of these are
 # excluded from the dropdown. ``debug-console`` is the macOS USB-CDC debug
 # channel on the ESP32-S3 — never the WiFi data port.
@@ -432,19 +464,52 @@ def build_dashboard():
     LX, LW = 0.012, 0.345
     RX, RW = 0.365, 0.623
 
-    dev_card    = (LX, 0.700, LW, 0.220)
-    param_card  = (LX, 0.420, LW, 0.270)
-    action_card = (LX, 0.200, LW, 0.210)
-    log_card    = (LX, 0.040, LW, 0.150)
+    # Left column, bottom-up, 0.010 between cards. Every height below is the
+    # card's measured content need plus a ~0.010 bottom margin, sized against
+    # the LOOSER of the two text metrics this figure gets rendered with (a
+    # headless Agg render lays 8 pt text out ~12% taller per line than the
+    # MacOSX backend the operator actually opens), so nothing clips either way.
+    #
+    # PARAMETERS is the card the budget is built around. At the 0.085 row pitch
+    # it shipped with, its four label+control rows need 0.379 of height and the
+    # whole column only has 0.850 to spend on four cards — which is why its
+    # last row used to be drawn outside the card, on top of RUN. The rows
+    # tighten to a 0.068 pitch (see that block) and the card grows 0.270 ->
+    # 0.305, paid for by DEVICES (0.220 -> 0.194) and RUN (0.210 -> 0.189),
+    # both of which had unused space below their last row.
+    #
+    # LOG grows 0.150 -> 0.162 to hold its scrollback WITHOUT clipping. Even so
+    # it holds 7 lines, not 8: 8 lines need a 0.175 card, the four minimum needs
+    # then sum to 0.893 against 0.880 available, and the only way to buy that
+    # back is to cut every card in the column to a ~0.004 (3 px) bottom margin.
+    # One line of scrollback is the cheaper trade, and it costs the operator
+    # nothing today — the shipped card had room for 0.116 and its 8-line budget
+    # needs 0.117, so the 8th line was already being clipped unseen.
+    dev_card    = (LX, 0.726, LW, 0.194)
+    param_card  = (LX, 0.411, LW, 0.305)
+    action_card = (LX, 0.212, LW, 0.189)
+    log_card    = (LX, 0.040, LW, 0.162)
 
     live_card  = (RX, 0.540, RW, 0.380)
     sweep_card = (RX, 0.290, RW, 0.240)
     lat_card   = (RX, 0.040, RW, 0.240)
 
-    add_panel(fig, dev_card,    title='DEVICES')
-    add_panel(fig, param_card,  title='PARAMETERS')
-    add_panel(fig, action_card, title='RUN')
-    add_panel(fig, log_card,    title='LOG')
+    # content_top is the title's measured bottom; TITLE_GAP is the clear space
+    # under it before the first content row (see _ui.add_panel's docstring).
+    dev_top    = add_panel(fig, dev_card,    title='DEVICES').content_top    - TITLE_GAP
+    param_top  = add_panel(fig, param_card,  title='PARAMETERS').content_top - TITLE_GAP
+    action_top = add_panel(fig, action_card, title='RUN').content_top        - TITLE_GAP
+    log_top    = add_panel(fig, log_card,    title='LOG').content_top        - TITLE_GAP
+    # Plot cards keep their axes inset by _inset(top=<fraction>) below.
+    #
+    # KNOWN PRE-EXISTING overlap, separate from this file's _titled_panel ->
+    # content_top change and NOT fixed by it: a fixed top fraction cannot track
+    # the growing title on a small figure, so at ~1366x768 the RATE SWEEP /
+    # LATENCY top y-tick label grazes its own title. The measured-body fix the
+    # text cards use is NOT sufficient here -- these plots pin set_ylim, so a
+    # tick lands at the axes top edge and its label overshoots UPWARD past it;
+    # clearing that needs a measured top-tick margin in _ui, which is its own
+    # change. Tracked separately; do not paper over it with a hand-tuned fraction.
     add_panel(fig, live_card,   title='LIVE THROUGHPUT')
     add_panel(fig, sweep_card,  title='RATE SWEEP')
     add_panel(fig, lat_card,    title='LATENCY')
@@ -456,14 +521,19 @@ def build_dashboard():
     # ------------------------------------------------------------------
     dev_meta = {}  # dev -> dict(port_btn, port, btn, dot)
 
-    def _make_device_row(dev, label, y_top):
-        fig.text(dev_card[0] + 0.012, y_top - 0.018, label,
-                 fontsize=9, fontweight='bold', color=TEXT,
-                 family='monospace', va='top')
+    def _make_device_row(dev, label, row_top):
+        """row_top = y of the TOP of this row's controls (not of its label).
+
+        The label is centred on the controls rather than offset from a row
+        origin, so the row has one anchor and the label cannot drift off it.
+        """
         port_x = dev_card[0] + 0.060
         port_w = LW - 0.060 - 0.110
-        port_y = y_top - 0.045
         port_h = 0.034
+        port_y = row_top - port_h
+        fig.text(dev_card[0] + 0.012, port_y + port_h * 0.5, label,
+                 fontsize=9, fontweight='bold', color=TEXT,
+                 family='monospace', va='center')
         port_btn = make_button(fig, (port_x, port_y, port_w, port_h),
                                 '(no ports)', kind='default')
         port_btn._ui_ax.set_zorder(3.0)
@@ -484,8 +554,8 @@ def build_dashboard():
         dev_meta[dev] = {'port_btn': port_btn, 'port': '',
                           'btn': btn, 'dot': dot}
 
-    _make_device_row('a', 'AP',  dev_card[1] + dev_card[3] - 0.020)
-    _make_device_row('b', 'STA', dev_card[1] + dev_card[3] - 0.090)
+    _make_device_row('a', 'AP',  dev_top)
+    _make_device_row('b', 'STA', dev_top - 0.070)   # 0.070 row pitch
 
     # Bottom row: Refresh + Baud
     bot_y = dev_card[1] + 0.012
@@ -504,84 +574,64 @@ def build_dashboard():
     _style_textbox(tb_baud)
 
     # ------------------------------------------------------------------
-    # PARAMETERS card — labeled text-boxes.
+    # PARAMETERS card — four rows of [label] above [control], each row chained
+    # off the one above it and the first off the card's measured body top, so
+    # the title can never be drawn onto row 1 again.
+    #
+    # The pitch works out at ~0.068 (measured label 0.0159-0.0172 + TITLE_GAP +
+    # control 0.032 + ROW_GAP), tightened from the 0.085 this card shipped
+    # with — nothing here is a fixed pitch, each row is measured. That is not a
+    # taste call: four rows at 0.085 need 0.379 of card height, and the left
+    # column has only 0.850 for its four cards, so the sweep row used to be
+    # drawn OUTSIDE this card — on the RUN card below, under the RUN title.
+    #
+    # Fits at >=1920x1200. KNOWN pre-existing residual, tracked separately (NOT
+    # this file's _titled_panel -> content_top change, which is byte-identical):
+    # at ~1366x768 the growing title reserve + taller measured labels push the
+    # sweep box ~0.025 past the card bottom, so it still just grazes the RUN
+    # title. Root fix is a left-column height re-budget, not a hand-tuned pitch.
     # ------------------------------------------------------------------
     pe_x = param_card[0] + 0.012
     pe_w = 0.085
     pe_h = 0.032
 
-    def _param_row(y_top, items):
-        """items = [(label, init_value, key)] up to 2 per row."""
-        row = []
-        for idx, (label, init, _key) in enumerate(items):
-            base_x = pe_x + idx * (LW * 0.49)
-            fig.text(base_x, y_top, label,
-                     fontsize=8.5, color=TEXT_DIM, family='monospace',
-                     va='top')
-            ax = fig.add_axes((base_x, y_top - 0.045, pe_w, pe_h))
-            ax.set_zorder(3.0)
-            tb = TextBox(ax, '', initial=init,
-                         color=PANEL, hovercolor=PANEL_EDGE)
-            _style_textbox(tb)
-            row.append(tb)
-        return row
+    def _param_box(x, top, w, init):
+        """A themed TextBox whose TOP edge sits at `top`."""
+        ax = fig.add_axes((x, top - pe_h, w, pe_h))
+        ax.set_zorder(3.0)
+        tb = TextBox(ax, '', initial=init, color=PANEL, hovercolor=PANEL_EDGE)
+        _style_textbox(tb)
+        return tb
 
-    y0 = param_card[1] + param_card[3] - 0.018
     # Direction is a 2-button toggle (AP->STA, STA->AP), not a textbox.
-    fig.text(pe_x, y0, 'DIRECTION', fontsize=8.5, color=TEXT_DIM,
-             family='monospace', va='top')
-    btn_dir_ab = make_button(fig, (pe_x, y0 - 0.045, 0.085, pe_h),
+    dir_top = _field_label(fig, pe_x, param_top, 'DIRECTION')
+    btn_dir_ab = make_button(fig, (pe_x, dir_top - pe_h, pe_w, pe_h),
                               'AP -> STA', kind='primary')
-    btn_dir_ba = make_button(fig, (pe_x + 0.090, y0 - 0.045, 0.085, pe_h),
+    btn_dir_ba = make_button(fig, (pe_x + 0.090, dir_top - pe_h, pe_w, pe_h),
                               'STA -> AP', kind='default')
     btn_dir_ab._ui_ax.set_zorder(3.0)
     btn_dir_ba._ui_ax.set_zorder(3.0)
 
-    # Chunk size, Duration
-    yA = y0 - 0.085
-    fig.text(pe_x, yA, 'CHUNK B', fontsize=8.5, color=TEXT_DIM,
-             family='monospace', va='top')
-    ax_chunk = fig.add_axes((pe_x, yA - 0.045, 0.085, pe_h))
-    ax_chunk.set_zorder(3.0)
-    tb_chunk = TextBox(ax_chunk, '', initial='256',
-                       color=PANEL, hovercolor=PANEL_EDGE)
-    _style_textbox(tb_chunk)
-    fig.text(pe_x + 0.095, yA, 'DURATION s', fontsize=8.5, color=TEXT_DIM,
-             family='monospace', va='top')
-    ax_dur = fig.add_axes((pe_x + 0.095, yA - 0.045, 0.085, pe_h))
-    ax_dur.set_zorder(3.0)
-    tb_dur = TextBox(ax_dur, '', initial='8',
-                     color=PANEL, hovercolor=PANEL_EDGE)
-    _style_textbox(tb_dur)
+    # Chunk size + Duration. Two fields on one row are the same font at the
+    # same top, so the first label's measured bottom sets the top for both.
+    yA = dir_top - pe_h - ROW_GAP
+    rowA_top = _field_label(fig, pe_x, yA, 'CHUNK B')
+    _field_label(fig, pe_x + 0.095, yA, 'DURATION s')
+    tb_chunk = _param_box(pe_x,         rowA_top, pe_w, '256')
+    tb_dur   = _param_box(pe_x + 0.095, rowA_top, pe_w, '8')
 
     # Paced rate + ping count
-    yB = yA - 0.085
-    fig.text(pe_x, yB, 'PACED kbps', fontsize=8.5, color=TEXT_DIM,
-             family='monospace', va='top')
-    ax_rate = fig.add_axes((pe_x, yB - 0.045, 0.085, pe_h))
-    ax_rate.set_zorder(3.0)
-    tb_rate = TextBox(ax_rate, '', initial='100',
-                      color=PANEL, hovercolor=PANEL_EDGE)
-    _style_textbox(tb_rate)
-    fig.text(pe_x + 0.095, yB, 'PING N', fontsize=8.5, color=TEXT_DIM,
-             family='monospace', va='top')
-    ax_ping = fig.add_axes((pe_x + 0.095, yB - 0.045, 0.060, pe_h))
-    ax_ping.set_zorder(3.0)
-    tb_ping = TextBox(ax_ping, '', initial='20',
-                      color=PANEL, hovercolor=PANEL_EDGE)
-    _style_textbox(tb_ping)
+    yB = rowA_top - pe_h - ROW_GAP
+    rowB_top = _field_label(fig, pe_x, yB, 'PACED kbps')
+    _field_label(fig, pe_x + 0.095, yB, 'PING N')
+    tb_rate = _param_box(pe_x,         rowB_top, pe_w,  '100')
+    tb_ping = _param_box(pe_x + 0.095, rowB_top, 0.060, '20')
 
     # Sweep rates (wider box)
-    yC = yB - 0.085
-    fig.text(pe_x, yC, 'SWEEP kbps (comma list)',
-             fontsize=8.5, color=TEXT_DIM,
-             family='monospace', va='top')
-    ax_sweep = fig.add_axes((pe_x, yC - 0.045, LW - 0.024, pe_h))
-    ax_sweep.set_zorder(3.0)
-    tb_sweep = TextBox(ax_sweep, '',
-                       initial='16,32,64,96,128,160,200,300,500',
-                       color=PANEL, hovercolor=PANEL_EDGE)
-    _style_textbox(tb_sweep)
+    yC = rowB_top - pe_h - ROW_GAP
+    rowC_top = _field_label(fig, pe_x, yC, 'SWEEP kbps (comma list)')
+    tb_sweep = _param_box(pe_x, rowC_top, LW - 0.024,
+                          '16,32,64,96,128,160,200,300,500')
 
     # ------------------------------------------------------------------
     # ACTION card — Burst / Paced / Latency / Sweep + Stop + Clear.
@@ -589,7 +639,7 @@ def build_dashboard():
     act_x = action_card[0] + 0.012
     act_w = (LW - 0.024 - 0.018) / 2.0   # two columns
     act_h = 0.040
-    row1_y = action_card[1] + action_card[3] - act_h - 0.030
+    row1_y = action_top - act_h          # top row hangs off the title reserve
     row2_y = row1_y - (act_h + 0.012)
     row3_y = row2_y - (act_h + 0.012)
 
@@ -613,8 +663,7 @@ def build_dashboard():
     # LOG card — last N lines as a single monospace text block.
     # ------------------------------------------------------------------
     log_x = log_card[0] + 0.010
-    log_y_top = log_card[1] + log_card[3] - 0.022
-    log_h = fig.text(log_x, log_y_top, '',
+    log_h = fig.text(log_x, log_top, '',
                       fontsize=8.0, color=TEXT_DIM, family='monospace',
                       va='top', ha='left')
 
@@ -682,7 +731,10 @@ def build_dashboard():
         'sweep_rx':     [],
         'sweep_loss':   [],
         'lat_samples':  [],
-        'log_lines':    deque(maxlen=8),
+        # 7, not 8: this is what the LOG card can show without clipping the
+        # oldest line. Keep it in step with log_card's height — see the layout
+        # block for the arithmetic.
+        'log_lines':    deque(maxlen=7),
         'summary':      '',
         'summary_col':  TEXT_DIM,
         'live_t0':      0.0,

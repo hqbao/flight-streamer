@@ -44,7 +44,7 @@ from _fc_pytools import add_flight_controller_pytools   # noqa: E402
 add_flight_controller_pytools()
 from _ui import (                          # noqa: E402
     apply_theme, make_figure, add_panel, make_button, restyle_button,
-    make_footer, screen_fit_figsize,
+    make_footer, screen_fit_figsize, _fig_y0, TITLE_GAP,
     PANEL, PANEL_EDGE, TEXT, TEXT_DIM, TEXT_FAINT, GOOD,
 )
 
@@ -221,6 +221,41 @@ def _style_textbox(tb):
         pass
 
 
+# ---------------------------------------------------------------------------
+# Field-label layout
+#
+# The card-title collision is fixed UPSTREAM now: add_panel returns content_top
+# (the title's measured bottom) and callers inset by it directly, so the local
+# _titled_panel that used to re-measure the title add_panel drew is gone.
+#
+# The FIELD labels (MESSAGE, INTERVAL ms) this dashboard draws itself are still
+# a caller-side job -- add_panel never sees them. A field label is 8.5 pt, so its
+# height as a FRACTION of the figure grows as the figure shrinks (and
+# screen_fit_figsize picks the figure size from the operator's display), which
+# makes a constant "label height" offset wrong on a different screen. So a
+# control is placed at its label's MEASURED bottom, via _ui._fig_y0 -- the same
+# primitive add_panel's content_top is built on. TITLE_GAP is _ui's one "clear
+# space under a label" token, reused here.
+# ---------------------------------------------------------------------------
+# The SEND card's own row gap. Deliberately 0.010, tighter than _ui.ROW_GAP
+# (0.013): the card fits three rows in 0.220 and 0.013 would leave its bottom
+# row only a 0.004 (3 px) margin. A caller-side budget choice, not the shared
+# token.
+_SEND_ROW_GAP = 0.010
+
+
+def _field_label(fig, x, top, text):
+    """Draw a field label with its TOP at `top`; return its control's top y.
+
+    Returning the measured bottom keeps a control off its own label: the MESSAGE
+    box used to be drawn over the MESSAGE label when the label was placed with a
+    hand-guessed offset from the box instead.
+    """
+    label = fig.text(x, top, text, fontsize=8.5, color=TEXT_DIM,
+                     family='monospace', va='top')
+    return _fig_y0(fig, label) - TITLE_GAP
+
+
 # See dblink/tools/bandwidth_lab.py for the same filter.
 _PORT_HIDE    = ('debug-console', 'Bluetooth', 'wlan-debug', 'wireless')
 _PORT_PREFER  = ('usbmodem', 'usbserial', 'SLAB_USB', 'ttyACM', 'ttyUSB')
@@ -261,24 +296,33 @@ def build_dashboard():
     log_a_card = (0.012, 0.040, 0.488, 0.640)
     log_b_card = (0.500, 0.040, 0.488, 0.640)
 
-    add_panel(fig, dev_card,  title='DEVICES')
-    add_panel(fig, send_card, title='SEND TEST DATA')
-    add_panel(fig, log_a_card, title='DEVICE A  (AP)')
-    add_panel(fig, log_b_card, title='DEVICE B  (STA)')
+    # content_top is the title's measured bottom; TITLE_GAP is the clear space
+    # under it before the first content row (see _ui.add_panel's docstring).
+    dev_top  = add_panel(fig, dev_card,  title='DEVICES').content_top        - TITLE_GAP
+    send_top = add_panel(fig, send_card, title='SEND TEST DATA').content_top - TITLE_GAP
+    log_top = {
+        'a': add_panel(fig, log_a_card, title='DEVICE A  (AP)').content_top  - TITLE_GAP,
+        'b': add_panel(fig, log_b_card, title='DEVICE B  (STA)').content_top - TITLE_GAP,
+    }
 
     # ------------------------------------------------------------------
     # DEVICES card
     # ------------------------------------------------------------------
     dev_meta = {}
 
-    def _row(dev, label, y_top):
-        fig.text(dev_card[0] + 0.012, y_top - 0.018, label,
-                 fontsize=9, fontweight='bold', color=TEXT,
-                 family='monospace', va='top')
+    def _row(dev, label, row_top):
+        """row_top = y of the TOP of this row's controls (not of its label).
+
+        The label is centred on the controls rather than offset from a row
+        origin, so the row has one anchor and the label cannot drift off it.
+        """
         port_x = dev_card[0] + 0.080
         port_w = 0.180
-        port_y = y_top - 0.045
         port_h = 0.034
+        port_y = row_top - port_h
+        fig.text(dev_card[0] + 0.012, port_y + port_h * 0.5, label,
+                 fontsize=9, fontweight='bold', color=TEXT,
+                 family='monospace', va='center')
         port_btn = make_button(fig, (port_x, port_y, port_w, port_h),
                                 '(no ports)', kind='default')
         port_btn._ui_ax.set_zorder(3.0)
@@ -292,8 +336,8 @@ def build_dashboard():
         dev_meta[dev] = {'port_btn': port_btn, 'port': '',
                           'btn': btn, 'dot': dot}
 
-    _row('a', 'AP',  dev_card[1] + dev_card[3] - 0.020)
-    _row('b', 'STA', dev_card[1] + dev_card[3] - 0.090)
+    _row('a', 'AP',  dev_top)
+    _row('b', 'STA', dev_top - 0.070)   # 0.070 row pitch
 
     btn_refresh = make_button(fig, (dev_card[0] + 0.012,
                                      dev_card[1] + 0.012, 0.095, 0.034),
@@ -301,24 +345,30 @@ def build_dashboard():
     btn_refresh._ui_ax.set_zorder(3.0)
 
     # ------------------------------------------------------------------
-    # SEND card
+    # SEND card — three rows chained downward from the card's measured body
+    # top: [MESSAGE field] / [Send + Auto buttons, INTERVAL field] / [Clear +
+    # Reset Stats]. Each row was previously pinned to the card rect with its
+    # own hand-picked offset, which put the card title on the MESSAGE box and
+    # the MESSAGE label INSIDE it.
     # ------------------------------------------------------------------
+    msg_h = 0.034
+    btn_w = 0.105
+    btn_h = 0.040
+    bx = send_card[0] + 0.012
+
     # Message text-box (wide).
-    msg_y = send_card[1] + send_card[3] - 0.060
-    fig.text(send_card[0] + 0.012, msg_y + 0.030, 'MESSAGE',
-             fontsize=8.5, color=TEXT_DIM, family='monospace', va='top')
-    ax_msg = fig.add_axes((send_card[0] + 0.012, msg_y,
-                           send_card[2] - 0.024, 0.034))
+    msg_y = _field_label(fig, bx, send_top, 'MESSAGE') - msg_h
+    ax_msg = fig.add_axes((bx, msg_y, send_card[2] - 0.024, msg_h))
     ax_msg.set_zorder(3.0)
     tb_msg = TextBox(ax_msg, '', initial='Hello Bridge',
                      color=PANEL, hovercolor=PANEL_EDGE)
     _style_textbox(tb_msg)
 
-    # Action row: [Send A->B] [Send B->A] | [Auto toggle] [Interval ms]
-    act_y = send_card[1] + 0.075
-    btn_w = 0.105
-    btn_h = 0.040
-    bx = send_card[0] + 0.012
+    # Action row: [Send A->B] [Send B->A] | [Auto toggle] [Interval ms].
+    # The INTERVAL label is placed first because the button row's top is
+    # whatever that label leaves free below the MESSAGE box.
+    int_x = bx + 3 * (btn_w + 0.010) + 0.025
+    act_y = _field_label(fig, int_x, msg_y - _SEND_ROW_GAP, 'INTERVAL ms') - btn_h
     btn_sa = make_button(fig, (bx, act_y, btn_w, btn_h),
                          'Send A -> B', kind='primary')
     btn_sb = make_button(fig, (bx + btn_w + 0.010, act_y, btn_w, btn_h),
@@ -330,10 +380,7 @@ def build_dashboard():
     for b in (btn_sa, btn_sb, btn_auto):
         b._ui_ax.set_zorder(3.0)
 
-    # Interval textbox + label
-    int_x = bx + 3 * (btn_w + 0.010) + 0.025
-    fig.text(int_x, act_y + btn_h + 0.004, 'INTERVAL ms',
-             fontsize=8.5, color=TEXT_DIM, family='monospace', va='bottom')
+    # Interval textbox (its label is placed with the action row above).
     ax_int = fig.add_axes((int_x, act_y, 0.065, btn_h))
     ax_int.set_zorder(3.0)
     tb_int = TextBox(ax_int, '', initial='1000',
@@ -341,7 +388,7 @@ def build_dashboard():
     _style_textbox(tb_int)
 
     # Bottom row: [Clear A] [Clear B] [Clear All]    stats on right
-    cl_y = send_card[1] + 0.018
+    cl_y = act_y - _SEND_ROW_GAP - 0.034
     cl_w = 0.070
     btn_clear_a   = make_button(fig, (bx,                         cl_y, cl_w, 0.034),
                                  'Clear A',   kind='default')
@@ -361,15 +408,17 @@ def build_dashboard():
     # ------------------------------------------------------------------
     LOG_LINES = 28
 
-    def _log_handle(card):
-        return fig.text(card[0] + 0.010,
-                         card[1] + card[3] - 0.022,
+    def _log_handle(card, top):
+        return fig.text(card[0] + 0.010, top,
                          '', fontsize=8.0,
                          color=TEXT_DIM, family='monospace',
                          va='top', ha='left')
 
-    log_h = {'a': _log_handle(log_a_card),
-             'b': _log_handle(log_b_card)}
+    # These start EMPTY, which is why the title collision here outlived the one
+    # in bandwidth_lab.py: a zero-height text overlaps nothing, so the defect
+    # only appeared once a line was logged. Both hang off the measured body top.
+    log_h = {'a': _log_handle(log_a_card, log_top['a']),
+             'b': _log_handle(log_b_card, log_top['b'])}
     log_buf = {'a': deque(maxlen=LOG_LINES), 'b': deque(maxlen=LOG_LINES)}
 
     # ------------------------------------------------------------------
