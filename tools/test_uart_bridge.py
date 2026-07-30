@@ -13,7 +13,8 @@ Setup:
   3. Connect both via USB; pick their ports below; Connect both;
      then Send A -> B / Send B -> A or enable Auto.
 
-UI style: flight-controller/tools/_ui.py (shared dashboard primitives).
+UI style: flight-controller/tools/pytools/_ui.py (shared dashboard primitives) —
+a sibling checkout of that repository is REQUIRED; see tools/_fc_pytools.py.
 """
 
 from __future__ import annotations
@@ -36,15 +37,15 @@ from matplotlib.widgets import TextBox     # noqa: E402
 import serial                              # noqa: E402
 import serial.tools.list_ports             # noqa: E402
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.normpath(
-    os.path.join(_HERE, '..', '..', 'flight-controller', 'tools')))
+# The dashboard primitives live in the sibling flight-controller repository;
+# _fc_pytools resolves that cross-repository path and, if it is absent or has
+# moved, exits with the path it tried instead of a bare ModuleNotFoundError.
+from _fc_pytools import add_flight_controller_pytools   # noqa: E402
+add_flight_controller_pytools()
 from _ui import (                          # noqa: E402
     apply_theme, make_figure, add_panel, make_button, restyle_button,
     make_footer, screen_fit_figsize,
-    BG, PANEL, PANEL_EDGE, TEXT, TEXT_DIM, TEXT_FAINT,
-    ACCENT, GOOD, WARN, BAD,
-    TRACE_1, TRACE_2,
+    PANEL, PANEL_EDGE, TEXT, TEXT_DIM, TEXT_FAINT, GOOD,
 )
 
 

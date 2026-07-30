@@ -9,8 +9,9 @@ Test modes:
   • Latency  — single-marker round trip (USB→WiFi→USB).
   • Sweep    — step through a list of rates, find the loss-free knee.
 
-Dependencies: pyserial, matplotlib.
-UI style:    flight-controller/tools/_ui.py (shared dashboard primitives).
+Dependencies: pyserial, matplotlib, and a sibling checkout of the
+flight-controller repository, which supplies the shared dashboard primitives
+tools/pytools/_ui.py — see tools/_fc_pytools.py.
 """
 
 from __future__ import annotations
@@ -35,17 +36,18 @@ from matplotlib.widgets import TextBox    # noqa: E402
 import serial                             # noqa: E402
 import serial.tools.list_ports            # noqa: E402
 
-# Pull in the shared dashboard toolkit from flight-controller/tools/.
-_HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.normpath(
-    os.path.join(_HERE, '..', '..', 'flight-controller', 'tools')))
+# The dashboard primitives live in the sibling flight-controller repository;
+# _fc_pytools resolves that cross-repository path and, if it is absent or has
+# moved, exits with the path it tried instead of a bare ModuleNotFoundError.
+from _fc_pytools import add_flight_controller_pytools  # noqa: E402
+add_flight_controller_pytools()
 from _ui import (                         # noqa: E402
     apply_theme, make_figure, add_panel, style_axes, make_button,
     restyle_button, make_footer, screen_fit_figsize, _inset,
     enable_scroll_zoom, add_scroll_hint,
-    BG, PANEL, PANEL_EDGE, GRID, TEXT, TEXT_DIM, TEXT_FAINT,
+    PANEL, PANEL_EDGE, TEXT, TEXT_DIM, TEXT_FAINT,
     ACCENT, GOOD, WARN, BAD,
-    TRACE_1, TRACE_2, TRACE_3, TRACE_4, TRACE_GREY,
+    TRACE_1, TRACE_2,
 )
 
 
@@ -504,10 +506,6 @@ def build_dashboard():
     # ------------------------------------------------------------------
     # PARAMETERS card — labeled text-boxes.
     # ------------------------------------------------------------------
-    param_inner = add_panel(fig, (0, 0, 0, 0))   # unused; placeholder removed below
-    # remove placeholder
-    param_inner.remove()
-
     pe_x = param_card[0] + 0.012
     pe_w = 0.085
     pe_h = 0.032
@@ -529,7 +527,6 @@ def build_dashboard():
         return row
 
     y0 = param_card[1] + param_card[3] - 0.018
-    [tb_dir_dummy, tb_chunk] = [None, None]
     # Direction is a 2-button toggle (AP->STA, STA->AP), not a textbox.
     fig.text(pe_x, y0, 'DIRECTION', fontsize=8.5, color=TEXT_DIM,
              family='monospace', va='top')
@@ -1094,7 +1091,7 @@ def build_dashboard():
 
 
 def main():
-    fig = build_dashboard()
+    build_dashboard()
     plt.show()
 
 

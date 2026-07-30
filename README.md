@@ -75,6 +75,22 @@ python3 tools/test_uart_bridge.py     # two boards on USB: send A->B and B->A, p
 python3 tools/bandwidth_lab.py        # throughput and loss: burst, paced, latency, rate sweep
 ```
 
+Both are matplotlib dashboards, and both need **more than pip**: they draw with the shared UI
+(user interface) toolkit `tools/pytools/_ui.py` from the **flight-controller** repository rather
+than carrying a second copy of the theme. That repository must therefore be checked out as a
+sibling of this one:
+
+```
+<parent>/
+├── dblink/              # this repository
+└── flight-controller/   # REQUIRED — supplies tools/pytools/_ui.py
+```
+
+If it is missing, or if it has moved that file, both tools exit at once — before opening a serial
+port — and print the path they tried, the file they expected there, and how to fix it. That check
+lives in `tools/_fc_pytools.py`, and it is the only thing that catches this drift: nothing in this
+repository is built or tested when flight-controller reorganises its tools.
+
 ## 6. Known limitation — the WiFi hop drops packets
 
 Measured end to end (flight controller → station → WiFi → access point → host USB) with two
@@ -98,7 +114,7 @@ telemetry number over this link, try in order:
 | `modules/usb_server/` | the host wire (USB serial/JTAG) |
 | `modules/wifi/` | radio bring-up, access point or station |
 | `base/boards/<target>/` | per-board pins, LED driver, configuration, `flash.sh` |
-| `tools/` | the two host test tools |
+| `tools/` | the two host test tools, and `_fc_pytools.py` — the sibling-repository path they share |
 
 Each module's header comment says what it publishes, what it subscribes to, and the constraint
 that shaped it. `base/boards/*/managed_components/` is vendored ESP-IDF code — do not edit it.
