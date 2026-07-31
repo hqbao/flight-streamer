@@ -43,7 +43,7 @@ from _fc_pytools import add_flight_controller_pytools  # noqa: E402
 add_flight_controller_pytools()
 from _ui import (                         # noqa: E402
     apply_theme, make_figure, add_panel, style_axes, make_button,
-    restyle_button, make_footer, screen_fit_figsize, _inset, _fig_y0,
+    restyle_button, make_footer, screen_fit_figsize, plot_body, _fig_y0,
     enable_scroll_zoom, add_scroll_hint,
     TITLE_GAP, ROW_GAP,
     PANEL, PANEL_EDGE, TEXT, TEXT_DIM, TEXT_FAINT,
@@ -470,13 +470,14 @@ def build_dashboard():
     # headless Agg render lays 8 pt text out ~12% taller per line than the
     # MacOSX backend the operator actually opens), so nothing clips either way.
     #
-    # PARAMETERS is the card the budget is built around. At the 0.085 row pitch
-    # it shipped with, its four label+control rows need 0.379 of height and the
-    # whole column only has 0.850 to spend on four cards — which is why its
-    # last row used to be drawn outside the card, on top of RUN. The rows
-    # tighten to a 0.068 pitch (see that block) and the card grows 0.270 ->
-    # 0.305, paid for by DEVICES (0.220 -> 0.194) and RUN (0.210 -> 0.189),
-    # both of which had unused space below their last row.
+    # PARAMETERS is the card the budget is built around. Its four groups need
+    # more height than the column can spare on a small figure, so the card grew
+    # 0.270 -> 0.305, paid for by DEVICES (0.220 -> 0.194) and RUN (0.210 ->
+    # 0.189), both of which had unused space below their last row. Even so, four
+    # ABOVE-label rows do not fit at 1366x768 -- there is no more slack to take,
+    # so DIRECTION collapses to a single INLINE row instead (see that block),
+    # which frees the fourth row's height. The rows are each measured, not a
+    # fixed pitch.
     #
     # LOG grows 0.150 -> 0.162 to hold its scrollback WITHOUT clipping. Even so
     # it holds 7 lines, not 8: 8 lines need a 0.175 card, the four minimum needs
@@ -500,19 +501,17 @@ def build_dashboard():
     param_top  = add_panel(fig, param_card,  title='PARAMETERS').content_top - TITLE_GAP
     action_top = add_panel(fig, action_card, title='RUN').content_top        - TITLE_GAP
     log_top    = add_panel(fig, log_card,    title='LOG').content_top        - TITLE_GAP
-    # Plot cards keep their axes inset by _inset(top=<fraction>) below.
-    #
-    # KNOWN PRE-EXISTING overlap, separate from this file's _titled_panel ->
-    # content_top change and NOT fixed by it: a fixed top fraction cannot track
-    # the growing title on a small figure, so at ~1366x768 the RATE SWEEP /
-    # LATENCY top y-tick label grazes its own title. The measured-body fix the
-    # text cards use is NOT sufficient here -- these plots pin set_ylim, so a
-    # tick lands at the axes top edge and its label overshoots UPWARD past it;
-    # clearing that needs a measured top-tick margin in _ui, which is its own
-    # change. Tracked separately; do not paper over it with a hand-tuned fraction.
-    add_panel(fig, live_card,   title='LIVE THROUGHPUT')
-    add_panel(fig, sweep_card,  title='RATE SWEEP')
-    add_panel(fig, lat_card,    title='LATENCY')
+    # Plot cards: their axes top is placed by _ui.plot_body (see the PLOTS block
+    # below), which reserves the measured top-tick-label overshoot so a y-tick at
+    # the pinned axes top edge cannot print over the card title. A fixed top
+    # fraction could not track the growing title on a small figure, and the
+    # measured-body fix the text cards use was not enough on its own here -- these
+    # plots set_ylim, so a tick sits at the axes top edge and its label overshoots
+    # UPWARD past it. Capture content_top (the title's measured bottom) to hand to
+    # plot_body.
+    live_panel  = add_panel(fig, live_card,   title='LIVE THROUGHPUT')
+    sweep_panel = add_panel(fig, sweep_card,  title='RATE SWEEP')
+    lat_panel   = add_panel(fig, lat_card,    title='LATENCY')
 
     # ------------------------------------------------------------------
     # DEVICES card — two rows (AP, STA) of
@@ -574,22 +573,29 @@ def build_dashboard():
     _style_textbox(tb_baud)
 
     # ------------------------------------------------------------------
-    # PARAMETERS card — four rows of [label] above [control], each row chained
-    # off the one above it and the first off the card's measured body top, so
-    # the title can never be drawn onto row 1 again.
+    # PARAMETERS card — four parameter groups. Rows 2-4 are [label] above
+    # [control], each chained off the one above it and the first off the card's
+    # measured body top, so the title can never be drawn onto row 1 again. Row 1
+    # (DIRECTION) is a mode toggle with its label INLINE, which is both the
+    # idiomatic treatment for a toggle and the row-budget fix below.
     #
-    # The pitch works out at ~0.068 (measured label 0.0159-0.0172 + TITLE_GAP +
-    # control 0.032 + ROW_GAP), tightened from the 0.085 this card shipped
-    # with — nothing here is a fixed pitch, each row is measured. That is not a
-    # taste call: four rows at 0.085 need 0.379 of card height, and the left
-    # column has only 0.850 for its four cards, so the sweep row used to be
-    # drawn OUTSIDE this card — on the RUN card below, under the RUN title.
+    # Each row is MEASURED, not a fixed pitch: the label height is a fixed 8.5 pt
+    # and so a growing fraction of a shrinking figure, so a constant pitch tuned
+    # on one display is wrong on another (the same defect class add_panel's title
+    # reserve and plot_body's tick reserve each solve).
     #
-    # Fits at >=1920x1200. KNOWN pre-existing residual, tracked separately (NOT
-    # this file's _titled_panel -> content_top change, which is byte-identical):
-    # at ~1366x768 the growing title reserve + taller measured labels push the
-    # sweep box ~0.025 past the card bottom, so it still just grazes the RUN
-    # title. Root fix is a left-column height re-budget, not a hand-tuned pitch.
+    # WHY DIRECTION IS INLINE (the 1366x768 fix). Four ABOVE-label rows need more
+    # height than this card can hold on a small figure: the column has no slack
+    # to give it (DEVICES/RUN/LOG are each packed to their own content on a small
+    # figure, and the stack cannot grow down past the footer), so the fourth row
+    # (SWEEP) used to be drawn ~0.025 BELOW the card, over the RUN title. Making
+    # DIRECTION a single inline row frees one label-height + gap (~0.030 at
+    # 1366x768) -- just what the fourth row needs -- so the SWEEP box then sits
+    # INSIDE the card, clearing the RUN title by ~0.027, at every checked
+    # size/backend (its margin to its own card bottom is ~0.005 on the taller
+    # Agg metric, ~0.011 on the MacOSX one the operator opens, more at larger
+    # figures). This is a structural row-count change, not a hand-tuned pitch:
+    # the paired NUMERIC rows keep their above-labels, reading as grouped inputs.
     # ------------------------------------------------------------------
     pe_x = param_card[0] + 0.012
     pe_w = 0.085
@@ -603,31 +609,46 @@ def build_dashboard():
         _style_textbox(tb)
         return tb
 
-    # Direction is a 2-button toggle (AP->STA, STA->AP), not a textbox.
-    dir_top = _field_label(fig, pe_x, param_top, 'DIRECTION')
-    btn_dir_ab = make_button(fig, (pe_x, dir_top - pe_h, pe_w, pe_h),
+    # Row 1: DIRECTION toggle. This is the ONE row whose label is INLINE (left of
+    # the two toggle buttons) instead of above them. A mode toggle reads
+    # correctly with an inline label, and collapsing this header to a single row
+    # is what buys the card back its fourth row at 1366x768 (see the block
+    # header): an above-label here would cost a full row the column has no slack
+    # to give, and SWEEP would drop out of the card bottom onto the RUN title.
+    dir_row_top = param_top
+    dir_lbl = fig.text(pe_x, dir_row_top - pe_h * 0.5, 'DIRECTION',
+                       fontsize=8.5, color=TEXT_DIM, family='monospace',
+                       va='center')
+    # Buttons start just past the MEASURED label right edge. 'DIRECTION' is a
+    # fixed 8.5 pt -- a GROWING fraction on a smaller figure (0.036 wide at
+    # 2560x1600, 0.067 at 1366x768) -- so a constant button x collides with the
+    # label on a small figure (measured overlap -0.005 at 1366x768). Measuring
+    # keeps one constant gap at every size, as _field_label / add_panel do.
+    dir_btn_x = float(dir_lbl.get_window_extent()
+                      .transformed(fig.transFigure.inverted()).x1) + 0.012
+    btn_dir_ab = make_button(fig, (dir_btn_x, dir_row_top - pe_h, pe_w, pe_h),
                               'AP -> STA', kind='primary')
-    btn_dir_ba = make_button(fig, (pe_x + 0.090, dir_top - pe_h, pe_w, pe_h),
-                              'STA -> AP', kind='default')
+    btn_dir_ba = make_button(fig, (dir_btn_x + 0.090, dir_row_top - pe_h,
+                                    pe_w, pe_h), 'STA -> AP', kind='default')
     btn_dir_ab._ui_ax.set_zorder(3.0)
     btn_dir_ba._ui_ax.set_zorder(3.0)
 
-    # Chunk size + Duration. Two fields on one row are the same font at the
-    # same top, so the first label's measured bottom sets the top for both.
-    yA = dir_top - pe_h - ROW_GAP
+    # Row 2: Chunk size + Duration. Two NARROW fields, labels ABOVE, where they
+    # read as grouped inputs; the first label's measured bottom sets both tops.
+    yA = dir_row_top - pe_h - ROW_GAP
     rowA_top = _field_label(fig, pe_x, yA, 'CHUNK B')
     _field_label(fig, pe_x + 0.095, yA, 'DURATION s')
     tb_chunk = _param_box(pe_x,         rowA_top, pe_w, '256')
     tb_dur   = _param_box(pe_x + 0.095, rowA_top, pe_w, '8')
 
-    # Paced rate + ping count
+    # Row 3: Paced rate + ping count, labels above.
     yB = rowA_top - pe_h - ROW_GAP
     rowB_top = _field_label(fig, pe_x, yB, 'PACED kbps')
     _field_label(fig, pe_x + 0.095, yB, 'PING N')
     tb_rate = _param_box(pe_x,         rowB_top, pe_w,  '100')
     tb_ping = _param_box(pe_x + 0.095, rowB_top, 0.060, '20')
 
-    # Sweep rates (wider box)
+    # Row 4: Sweep rates (wide box, label above like the numeric rows).
     yC = rowB_top - pe_h - ROW_GAP
     rowC_top = _field_label(fig, pe_x, yC, 'SWEEP kbps (comma list)')
     tb_sweep = _param_box(pe_x, rowC_top, LW - 0.024,
@@ -670,8 +691,9 @@ def build_dashboard():
     # ------------------------------------------------------------------
     # PLOTS
     # ------------------------------------------------------------------
-    ax_live  = fig.add_axes(_inset(live_card, left=0.06, right=0.02,
-                                    top=0.14, bottom=0.18), zorder=2.0)
+    ax_live  = fig.add_axes(plot_body(fig, live_card, live_panel.content_top,
+                                       left=0.06, right=0.02, bottom=0.18),
+                             zorder=2.0)
     style_axes(ax_live, xlabel='t [s]', ylabel='kbps')
     line_tx, = ax_live.plot([], [], color=TRACE_1, lw=1.4,
                              label='offered (USB tx)')
@@ -681,8 +703,10 @@ def build_dashboard():
     ax_live.set_xlim(0, 10); ax_live.set_ylim(0, 200)
     enable_scroll_zoom(ax_live)
 
-    ax_sweep_plot = fig.add_axes(_inset(sweep_card, left=0.08, right=0.10,
-                                         top=0.14, bottom=0.20), zorder=2.0)
+    ax_sweep_plot = fig.add_axes(plot_body(fig, sweep_card,
+                                            sweep_panel.content_top,
+                                            left=0.08, right=0.10, bottom=0.20),
+                                  zorder=2.0)
     style_axes(ax_sweep_plot, xlabel='offered kbps', ylabel='delivered kbps')
     line_sweep_rx, = ax_sweep_plot.plot([], [], 'o-',
                                           color=GOOD, lw=1.6,
@@ -700,8 +724,9 @@ def build_dashboard():
                                             label='loss %')
     enable_scroll_zoom(ax_sweep_plot)
 
-    ax_lat = fig.add_axes(_inset(lat_card, left=0.06, right=0.02,
-                                  top=0.14, bottom=0.20), zorder=2.0)
+    ax_lat = fig.add_axes(plot_body(fig, lat_card, lat_panel.content_top,
+                                     left=0.06, right=0.02, bottom=0.20),
+                           zorder=2.0)
     style_axes(ax_lat, xlabel='sample #', ylabel='RTT [ms]')
     line_lat, = ax_lat.plot([], [], 'o-', color=TRACE_2, lw=1.2)
     ax_lat.set_xlim(0, 20); ax_lat.set_ylim(0, 100)
